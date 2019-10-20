@@ -40,14 +40,8 @@ func (i *Image) Write(w http.ResponseWriter) {
 	w.Write(i.Data)
 }
 
-// Create JPEG thumbnail from image.
-func (i *Image) ThumbnailJPEG(width int, height int, quality int) (*Image, error) {
-	return ThumbnailJPEG(i, width, height, quality)
-}
-
-// Create PNG thumbnail from image.
-func (i *Image) ThumbnailPNG(width int, height int) (*Image, error) {
-	return ThumbnailPNG(i, width, height)
+func (i *Image) Thumbnail(width int, height int, quality int) (*Image, error) {
+	return thumbnail(i, width, height, quality)
 }
 
 // Limit the size of uploaded files, put this before imageupload.Process.
@@ -95,16 +89,20 @@ func Process(r *http.Request, field string) (*Image, error) {
 	return i, nil
 }
 
-// Create JPEG thumbnail.
-func ThumbnailJPEG(i *Image, width int, height int, quality int) (*Image, error) {
+func thumbnail(i *Image, width int, height int, quality int) (*Image, error) {
 	img, _, err := image.Decode(bytes.NewReader(i.Data))
 
 	thumbnail := resize.Thumbnail(uint(width), uint(height), img, resize.Lanczos3)
 
 	data := new(bytes.Buffer)
-	err = jpeg.Encode(data, thumbnail, &jpeg.Options{
-		Quality: quality,
-	})
+	switch i.ContentType {
+	case "image/jpeg":
+		err = jpeg.Encode(data, thumbnail, &jpeg.Options{
+			Quality: quality,
+		})
+	case "image/png":
+		err = png.Encode(data, thumbnail)
+	}
 
 	if err != nil {
 		return nil, err
@@ -113,33 +111,8 @@ func ThumbnailJPEG(i *Image, width int, height int, quality int) (*Image, error)
 	bs := data.Bytes()
 
 	t := &Image{
-		Filename:    "thumbnail.jpg",
-		ContentType: "image/jpeg",
-		Data:        bs,
-		Size:        len(bs),
-	}
-
-	return t, nil
-}
-
-// Create PNG thumbnail.
-func ThumbnailPNG(i *Image, width int, height int) (*Image, error) {
-	img, _, err := image.Decode(bytes.NewReader(i.Data))
-
-	thumbnail := resize.Thumbnail(uint(width), uint(height), img, resize.Lanczos3)
-
-	data := new(bytes.Buffer)
-	err = png.Encode(data, thumbnail)
-
-	if err != nil {
-		return nil, err
-	}
-
-	bs := data.Bytes()
-
-	t := &Image{
-		Filename:    "thumbnail.png",
-		ContentType: "image/png",
+		Filename:    i.Filename,
+		ContentType: i.ContentType,
 		Data:        bs,
 		Size:        len(bs),
 	}
